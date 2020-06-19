@@ -1,61 +1,68 @@
 import * as core from '@actions/core';
-import { Client } from './client';
+import { Client, Success, Failure, Cancelled, Custom } from './client';
 import { IncomingWebhookSendArguments } from '@slack/webhook';
 
-async function run() {
+async function run(): Promise<void> {
   try {
-    let status: string = core.getInput('status', { required: true });
-    status = status.toLowerCase();
-    const mention = core.getInput('mention') as '' | 'channel' | 'here';
+    const status = core.getInput('status', { required: true }).toLowerCase();
+    const mention = core.getInput('mention');
     const author_name = core.getInput('author_name');
-    const only_mention_fail = core.getInput('only_mention_fail') as
-      | ''
-      | 'channel'
-      | 'here';
+    const if_mention = core.getInput('if_mention').toLowerCase();
     const text = core.getInput('text');
     const username = core.getInput('username');
     const icon_emoji = core.getInput('icon_emoji');
     const icon_url = core.getInput('icon_url');
     const channel = core.getInput('channel');
-    const rawPayload = core.getInput('payload');
+    const custom_payload = core.getInput('custom_payload');
+    const payload = core.getInput('payload');
+    const fields = core.getInput('fields');
 
     core.debug(`status: ${status}`);
     core.debug(`mention: ${mention}`);
     core.debug(`author_name: ${author_name}`);
-    core.debug(`only_mention_fail: ${only_mention_fail}`);
+    core.debug(`if_mention: ${if_mention}`);
     core.debug(`text: ${text}`);
     core.debug(`username: ${username}`);
     core.debug(`icon_emoji: ${icon_emoji}`);
     core.debug(`icon_url: ${icon_url}`);
     core.debug(`channel: ${channel}`);
-    core.debug(`rawPayload: ${rawPayload}`);
+    core.debug(`custom_payload: ${custom_payload}`);
+    core.debug(`payload: ${payload}`);
+    core.debug(`fields: ${fields}`);
 
-    const client = new Client({
-      status,
-      mention,
-      author_name,
-      only_mention_fail,
-      username,
-      icon_emoji,
-      icon_url,
-      channel,
-    });
+    const client = new Client(
+      {
+        status,
+        mention,
+        author_name,
+        if_mention,
+        username,
+        icon_emoji,
+        icon_url,
+        channel,
+        fields,
+      },
+      process.env.GITHUB_TOKEN,
+      process.env.SLACK_WEBHOOK_URL,
+    );
 
     switch (status) {
-      case 'success':
-        await client.success(text);
+      case Success:
+        await client.send(await client.success(text));
         break;
-      case 'failure':
-        await client.fail(text);
+      case Failure:
+        await client.send(await client.fail(text));
         break;
-      case 'cancelled':
-        await client.cancel(text);
+      case Cancelled:
+        await client.send(await client.cancel(text));
         break;
-      case 'custom':
-        var payload: IncomingWebhookSendArguments = eval(
-          `payload = ${rawPayload}`,
+      case Custom:
+        /* eslint-disable no-var */
+        var evalPayload: IncomingWebhookSendArguments = eval(
+          `evalPayload = ${custom_payload}`,
         );
-        await client.send(payload);
+        /* eslint-enable */
+        await client.send(evalPayload);
         break;
       default:
         throw new Error(
